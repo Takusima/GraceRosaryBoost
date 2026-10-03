@@ -16,7 +16,7 @@ SCAN_CODE = 0x11
 
 THEMES = {
     "sorrow": {"bg": "#000000", "idle": "#333333", "dim": "#222222", "accent": "#ff0000", "border": "#1a1a1a", "rain": True, "font": "Impact"},
-    "coko": {"bg": "#0b0d10", "idle": "#6d7480", "dim": "#30353c", "accent": "#d9e6f2", "border": "#3c4652", "rain": False, "font": "Segoe UI"},
+    "coko": {"bg": "#001a33", "idle": "#2f8cff", "dim": "#0b4f8a", "accent": "#ffffff", "border": "#0066cc", "rain": False, "font": "Segoe UI"},
 }
 
 current_theme = "sorrow"
@@ -34,6 +34,7 @@ dragging = False
 pulse_val = 0.0
 pulse_dir = 1
 drops = []
+kookoo_parts = []
 roblox_hwnd = None
 last_roblox_rect = None
 
@@ -194,6 +195,27 @@ def update_button_colors():
     rain_canvas.itemconfig(capture_text, text=(f"KEY: {capture_status or 'PRESS'}" if capture_slot else ""), fill=t["accent"])
 
 
+def draw_kookoo():
+    for item in kookoo_parts:
+        rain_canvas.delete(item)
+    kookoo_parts.clear()
+    if current_theme != "coko":
+        return
+    cx, cy, radius = W // 2, 104, 67
+    kookoo_parts.append(rain_canvas.create_oval(cx-radius, cy-radius, cx+radius, cy+radius, fill="#0057ff", outline="#0b2f8f", width=3))
+    for ex in (-25, 25):
+        kookoo_parts.append(rain_canvas.create_line(cx+ex-9, cy-15, cx+ex+9, cy+3, fill="white", width=5))
+        kookoo_parts.append(rain_canvas.create_line(cx+ex+9, cy-15, cx+ex-9, cy+3, fill="white", width=5))
+    kookoo_parts.append(rain_canvas.create_arc(cx-28, cy-2, cx+28, cy+34, start=200, extent=140, style="arc", outline="white", width=5))
+    for x1, x2, dy in [(-42,-55,-14),(-28,-34,-18),(-14,-16,-21),(0,0,-24),(14,16,-21),(28,34,-18),(42,55,-14)]:
+        kookoo_parts.append(rain_canvas.create_line(cx+x1, cy-radius, cx+x2, cy-radius+dy, fill="#0077ff", width=3))
+        kookoo_parts.append(rain_canvas.create_line(cx+x1, cy+radius, cx+x2, cy+radius-dy, fill="#0077ff", width=3))
+    rain_canvas.tag_raise(title_text)
+    rain_canvas.tag_raise(cps_display)
+    rain_canvas.tag_raise(m4_text)
+    rain_canvas.tag_raise(m5_text)
+
+
 def apply_theme():
     t = THEMES[current_theme]
     root.configure(bg=t["bg"], highlightbackground=t["border"])
@@ -202,6 +224,7 @@ def apply_theme():
     menu_button.configure(bg=t["bg"], fg=t["dim"], activebackground=t["bg"])
     rain_canvas.itemconfig(title_text, fill=t["idle"], font=(t["font"], 28))
     rain_canvas.itemconfig(cps_display, fill=t["idle"], font=(t["font"], 56))
+    draw_kookoo()
     update_button_colors()
 
 
@@ -219,8 +242,8 @@ def attack_visuals():
             bg = "#330000" if flash else interpolate_color("#000000", "#120000", pulse_val)
             fg = "#ff0000" if flash else interpolate_color("#660000", "#ff0000", pulse_val)
         else:
-            bg = interpolate_color("#0b0d10", "#1c242d", pulse_val)
-            fg = interpolate_color("#a9bfd2", "#f2f7fb", pulse_val)
+            bg = interpolate_color("#001a33", "#003b73", pulse_val)
+            fg = "#ffffff"
         rain_canvas.configure(bg=bg)
         close_button.configure(bg=bg)
         menu_button.configure(bg=bg)
