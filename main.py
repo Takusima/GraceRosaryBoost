@@ -390,6 +390,10 @@ root = tk.Tk()
 root.title("GraceRosaryBoost")
 root.geometry(f"{W}x{H}+100+100")
 root.overrideredirect(True)
+# Force visibility for borderless Tk windows on Windows.
+root.deiconify()
+root.lift()
+root.attributes("-topmost", True)
 root.configure(bg=THEMES[current_theme]["bg"], highlightthickness=2,
                highlightbackground=THEMES[current_theme]["border"])
 try:
