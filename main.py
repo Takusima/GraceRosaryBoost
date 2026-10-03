@@ -6,7 +6,7 @@ import random
 import threading
 import time
 import tkinter as tk
-from pynput import mouse
+from pynput import mouse, keyboard
 
 W, H = 220, 220
 CONFIG_FILE = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "GraceRosaryBoost", "settings.json")
@@ -22,6 +22,9 @@ THEMES = {
 current_theme = "sorrow"
 is_active = False
 selected_button = "M5"
+bindings = {"M4": {"type": "mouse", "value": "x1"}, "M5": {"type": "mouse", "value": "x2"}}
+capture_slot = None
+capture_status = ""
 cps_value = "30"
 follow_roblox = True
 follow_preset = "bottom-right"
@@ -36,7 +39,7 @@ last_roblox_rect = None
 
 
 def load_settings():
-    global current_theme, selected_button, cps_value, follow_roblox, follow_preset, saved_x, saved_y
+    global current_theme, selected_button, bindings, cps_value, follow_roblox, follow_preset, saved_x, saved_y
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -44,6 +47,12 @@ def load_settings():
             current_theme = data["theme"]
         if data.get("button") in ("M4", "M5"):
             selected_button = data["button"]
+        saved_bindings = data.get("bindings")
+        if isinstance(saved_bindings, dict):
+            for slot in ("M4", "M5"):
+                item = saved_bindings.get(slot)
+                if isinstance(item, dict) and item.get("type") in ("keyboard", "mouse") and item.get("value"):
+                    bindings[slot] = {"type": item["type"], "value": str(item["value"])}
         cps_value = str(max(1, min(100, int(data.get("cps", 30)))))
         follow_roblox = bool(data.get("follow_roblox", True))
         follow_preset = data.get("preset", "bottom-right")
@@ -57,7 +66,7 @@ def save_settings():
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump({
-                "theme": current_theme, "button": selected_button, "cps": int(cps_value or 30),
+                "theme": current_theme, "button": selected_button, "bindings": bindings, "cps": int(cps_value or 30),
                 "follow_roblox": follow_roblox, "preset": follow_preset,
                 "x": root.winfo_x(), "y": root.winfo_y()
             }, f, indent=2)
@@ -170,11 +179,19 @@ def interpolate_color(a, b, progress):
         int(b1 + (b2 - b1) * progress) >> 8)
 
 
+def binding_label(slot):
+    item = bindings[slot]
+    if item["type"] == "mouse":
+        return {"x1": "M4", "x2": "M5"}.get(item["value"], item["value"].upper())
+    return item["value"]
+
+
 def update_button_colors():
     t = THEMES[current_theme]
     color = t["accent"] if is_active else t["accent"]
-    rain_canvas.itemconfig(m4_text, fill=color if selected_button == "M4" else t["dim"])
-    rain_canvas.itemconfig(m5_text, fill=color if selected_button == "M5" else t["dim"])
+    rain_canvas.itemconfig(m4_text, text=binding_label("M4"), fill=color if selected_button == "M4" else t["dim"])
+    rain_canvas.itemconfig(m5_text, text=binding_label("M5"), fill=color if selected_button == "M5" else t["dim"])
+    rain_canvas.itemconfig(capture_text, text=(f"KEY: {capture_status or 'PRESS'}" if capture_slot else ""), fill=t["accent"])
 
 
 def apply_theme():
@@ -315,21 +332,64 @@ def on_key(event):
     save_settings()
 
 
+def start_capture(slot):
+    global capture_slot, capture_status
+    capture_slot = slot
+    capture_status = ""
+    update_button_colors()
+
+
+def finish_capture(slot, binding_type, value):
+    global capture_slot, capture_status
+    bindings[slot] = {"type": binding_type, "value": value}
+    capture_slot = None
+    capture_status = ""
+    update_button_colors()
+    save_settings()
+
+
+def keyboard_name(key):
+    if isinstance(key, keyboard.KeyCode):
+        return key.char.upper() if key.char else str(key).upper()
+    names = {
+        keyboard.Key.space: "SPACE", keyboard.Key.enter: "ENTER",
+        keyboard.Key.esc: "ESC", keyboard.Key.tab: "TAB",
+        keyboard.Key.backspace: "BACKSPACE", keyboard.Key.shift: "SHIFT",
+        keyboard.Key.ctrl: "CTRL", keyboard.Key.alt: "ALT", keyboard.Key.cmd: "WIN",
+        keyboard.Key.up: "UP", keyboard.Key.down: "DOWN",
+        keyboard.Key.left: "LEFT", keyboard.Key.right: "RIGHT",
+    }
+    return names.get(key, str(key).replace("Key.", "").upper())
+
+
+def on_keyboard_press(key):
+    if capture_slot:
+        finish_capture(capture_slot, "keyboard", keyboard_name(key))
+
+
 def on_canvas_click(event):
     global selected_button
     if 165 < event.y < 205:
         if 35 < event.x < 105:
             selected_button = "M4"
+            start_capture("M4")
         elif 115 < event.x < 185:
             selected_button = "M5"
+            start_capture("M5")
         update_button_colors()
         save_settings()
 
 
 def on_mouse_click(x, y, button, pressed):
     global is_active
-    if pressed:
-        target = mouse.Button.x1 if selected_button == "M4" else mouse.Button.x2
+    if not pressed:
+        return
+    if capture_slot and button in (mouse.Button.x1, mouse.Button.x2):
+        finish_capture(capture_slot, "mouse", "x1" if button == mouse.Button.x1 else "x2")
+        return
+    binding = bindings[selected_button]
+    if binding["type"] == "mouse":
+        target = mouse.Button.x1 if binding["value"] == "x1" else mouse.Button.x2
         if button == target:
             is_active = not is_active
             if is_active:
@@ -353,7 +413,7 @@ def show_menu(event=None):
     menu.add_command(label=f"Theme: {current_theme.title()}", state="disabled")
     menu.add_separator()
     menu.add_command(label="Sorrow", command=lambda: choose_theme("sorrow"))
-    menu.add_command(label="Coko", command=lambda: choose_theme("coko"))
+    menu.add_command(label="KooKoo", command=lambda: choose_theme("coko"))
     menu.add_separator()
     menu.add_command(label=("✓ Follow Roblox" if follow_roblox else "Follow Roblox"),
                      command=toggle_follow)
@@ -408,6 +468,7 @@ rain_canvas.bind("<ButtonPress-1>", start_drag)
 rain_canvas.bind("<B1-Motion>", drag_window)
 rain_canvas.bind("<ButtonRelease-1>", stop_drag)
 rain_canvas.bind("<Button-3>", show_menu)
+keyboard.Listener(on_press=on_keyboard_press, daemon=True).start()
 root.bind("<Key>", on_key)
 root.bind("<Button-3>", show_menu)
 
@@ -417,6 +478,7 @@ title_text = rain_canvas.create_text(W // 2, 45, text="GrRB", fill="#333333", fo
 cps_display = rain_canvas.create_text(W // 2, 115, text=cps_value, fill="#333333", font=("Impact", 56))
 m4_text = rain_canvas.create_text(70, 185, text="M4", fill="#222222", font=("Impact", 16))
 m5_text = rain_canvas.create_text(150, 185, text="M5", fill="#ff0000", font=("Impact", 16))
+capture_text = rain_canvas.create_text(W // 2, 155, text="", fill="#ff0000", font=("Segoe UI", 9))
 
 close_button = tk.Button(root, text="×", bg=THEMES[current_theme]["bg"], fg=THEMES[current_theme]["dim"],
                          bd=0, command=close_app, font=("Arial", 10), relief="flat")
