@@ -9,10 +9,8 @@ Automates the use of Rosary Ring abilities in Benediction to quickly change crou
 - Drag the window freely with the left mouse button.
 - Position and settings are saved between launches.
 - **Sorrow** theme keeps the original red rain style.
-- **Coko** theme adds a clean dark gray/light-accent style without rain.
 - Right-click or the ⋮ button opens settings.
 - CPS can be changed from 1 to 100.
-- No Windows auto-start is added.
 
 ## Controls
 
