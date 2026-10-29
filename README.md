@@ -8,7 +8,8 @@ Automates the use of Rosary Ring abilities in Benediction to quickly change crou
 - Optional **Follow Roblox** mode with five positions: top-left, top-right, bottom-left, bottom-right and center.
 - Drag the window freely with the left mouse button.
 - Position and settings are saved between launches.
-- **Sorrow** theme keeps the original red rain style.
+- Five themes: **Sorrow**, **Glitch**, **Void**, **Divine**, and **Retro**; each has its own palette and visual style.
+- Run timer displayed in the overlay: **F7** starts/pauses, **F8** resets. This test build uses manual timing; it does not automatically detect the start/end of a Grace run.
 - Right-click or the ⋮ button opens settings.
 - CPS can be changed from 1 to 100.
 
