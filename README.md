@@ -14,12 +14,12 @@ Automates the use of Rosary Ring abilities in Benediction to quickly change crou
 
 ## Controls
 
-- Mouse4 / Mouse5 selects the activation button.
-- Right-click opens the menu.
-- Use **Change Rosary key...** in the menu, then press the desired keyboard key. The choice is saved between launches.
-- Left-drag moves the overlay.
+- **Repeat key** is the key sent repeatedly while the tool is active.
+- **Toggle key** turns repetition on or off; defaults to F6.
+- Both keys can be changed from the right-click menu and are saved between launches.
+- Right-click opens the menu; left-drag moves the overlay.
 
-> The old source referenced `SCAN_CODE` without defining it. The new build defines it explicitly so the value can be adjusted for the actual in-game binding.
+> The repeat key defaults to W as a starting value. Set it to the actual Rosary binding used in your Roblox controls.
 
 ## Build
 
