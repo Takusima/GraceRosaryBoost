@@ -272,7 +272,6 @@ def animate_rain():
             nx = random.randint(-50, 250)
             rain_canvas.coords(drop_obj, nx, -80, nx - 3, -80 + length)
     root.after(35, animate_rain)
-root.after(100, update_timer_display)
 
 
 def start_drag(event):
