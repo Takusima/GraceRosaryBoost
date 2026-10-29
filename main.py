@@ -14,7 +14,11 @@ CONFIG_FILE = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "Grace
 # Default scan code for the in-game Rosary action; can be changed from the overlay menu.
 SCAN_CODE = 0x11
 scan_code_name = "W"
-capture_key = False
+repeat_key_vk = 0x57
+activation_key_vk = 0x75
+activation_key_name = "F6"
+capture_target = None
+activation_down = False
 
 THEMES = {
     "sorrow": {"bg": "#000000", "idle": "#333333", "dim": "#222222", "accent": "#ff0000", "border": "#1a1a1a", "rain": True, "font": "Impact"},
@@ -22,7 +26,6 @@ THEMES = {
 
 current_theme = "sorrow"
 is_active = False
-selected_button = "M5"
 cps_value = "30"
 follow_roblox = True
 follow_preset = "bottom-right"
@@ -37,19 +40,20 @@ last_roblox_rect = None
 
 
 def load_settings():
-    global current_theme, selected_button, cps_value, follow_roblox, follow_preset, saved_x, saved_y, SCAN_CODE, scan_code_name
+    global current_theme, cps_value, follow_roblox, follow_preset, saved_x, saved_y, SCAN_CODE, scan_code_name, repeat_key_vk, activation_key_vk, activation_key_name
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         if data.get("theme") in THEMES:
             current_theme = data["theme"]
-        if data.get("button") in ("M4", "M5"):
-            selected_button = data["button"]
         cps_value = str(max(1, min(100, int(data.get("cps", 30)))))
         follow_roblox = bool(data.get("follow_roblox", True))
         follow_preset = data.get("preset", "bottom-right")
         SCAN_CODE = max(1, min(255, int(data.get("scan_code", SCAN_CODE))))
         scan_code_name = str(data.get("scan_code_name", scan_code_name))
+        repeat_key_vk = int(data.get("repeat_key_vk", ord(scan_code_name.upper()[0]) if scan_code_name else 0x57))
+        activation_key_vk = int(data.get("activation_key_vk", activation_key_vk))
+        activation_key_name = str(data.get("activation_key_name", activation_key_name))
         saved_x, saved_y = data.get("x"), data.get("y")
     except Exception:
         pass
@@ -60,9 +64,11 @@ def save_settings():
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump({
-                "theme": current_theme, "button": selected_button, "cps": int(cps_value or 30),
+                "theme": current_theme, "cps": int(cps_value or 30),
                 "follow_roblox": follow_roblox, "preset": follow_preset,
                 "scan_code": SCAN_CODE, "scan_code_name": scan_code_name,
+                "repeat_key_vk": repeat_key_vk, "activation_key_vk": activation_key_vk,
+                "activation_key_name": activation_key_name,
                 "x": root.winfo_x(), "y": root.winfo_y()
             }, f, indent=2)
     except Exception:
@@ -176,9 +182,8 @@ def interpolate_color(a, b, progress):
 
 def update_button_colors():
     t = THEMES[current_theme]
-    color = t["accent"]
-    rain_canvas.itemconfig(m4_text, text="M4", fill=color if selected_button == "M4" else t["dim"])
-    rain_canvas.itemconfig(m5_text, text="M5", fill=color if selected_button == "M5" else t["dim"])
+    rain_canvas.itemconfig(repeat_key_text, text=f"REPEAT: {scan_code_name}", fill=t["accent"])
+    rain_canvas.itemconfig(activation_key_text, text=f"TOGGLE: {activation_key_name}", fill=t["idle"])
 
 
 
@@ -213,8 +218,8 @@ def attack_visuals():
         rain_canvas.coords(cps_display, W // 2 - dx, 115 + dy)
         rain_canvas.itemconfig(title_text, fill=fg)
         rain_canvas.itemconfig(cps_display, fill=fg)
-        rain_canvas.itemconfig(m4_text, fill=fg if selected_button == "M4" else t["dim"])
-        rain_canvas.itemconfig(m5_text, fill=fg if selected_button == "M5" else t["dim"])
+        rain_canvas.itemconfig(repeat_key_text, fill=fg)
+        rain_canvas.itemconfig(activation_key_text, fill=fg)
         root.config(highlightbackground=fg)
     else:
         rain_canvas.configure(bg=t["bg"])
@@ -314,65 +319,77 @@ def on_key(event):
     save_settings()
 
 
-def set_scan_code(code, name):
-    global SCAN_CODE, scan_code_name
+def set_scan_code(code, name, vk):
+    global SCAN_CODE, scan_code_name, repeat_key_vk
     SCAN_CODE = code
     scan_code_name = name
+    repeat_key_vk = vk
     root.title("GraceRosaryBoost")
+    update_button_colors()
     save_settings()
 
 
-def start_key_capture():
-    global capture_key
-    root.title("Press the desired Rosary key...")
-    capture_key = True
+def set_activation_key(vk, name):
+    global activation_key_vk, activation_key_name, activation_down
+    activation_key_vk = vk
+    activation_key_name = name
+    activation_down = False
+    root.title("GraceRosaryBoost")
+    update_button_colors()
+    save_settings()
 
 
-def on_keyboard_press(key):
-    global capture_key
-    if not capture_key:
-        return
+def start_key_capture(target):
+    global capture_target
+    capture_target = target
+    root.title("Press the desired key...")
+
+
+def key_virtual_code(key):
     vk = getattr(key, "vk", None)
     if vk is None:
         char = getattr(key, "char", None)
         if char:
             vk = ord(char.upper())
+    return vk
+
+
+def key_display_name(key, vk):
+    char = getattr(key, "char", None)
+    if char and char.isprintable():
+        return char.upper()
+    return str(key).replace("Key.", "").upper()
+
+
+def on_keyboard_press(key):
+    global capture_target, is_active, activation_down
+    vk = key_virtual_code(key)
     if not vk:
         return
-    code = ctypes.windll.user32.MapVirtualKeyW(vk, 0)
-    if not code:
+    if capture_target:
+        target = capture_target
+        capture_target = None
+        code = ctypes.windll.user32.MapVirtualKeyW(vk, 0)
+        if not code:
+            return
+        name = key_display_name(key, vk)
+        if target == "repeat":
+            root.after(0, lambda c=code, n=name, v=vk: set_scan_code(c, n, v))
+        else:
+            root.after(0, lambda v=vk, n=name: set_activation_key(v, n))
         return
-    name = getattr(key, "char", None) or str(key).replace("Key.", "")
-    capture_key = False
-    root.after(0, lambda: set_scan_code(code, name))
-
-
-def choose_button(button):
-    global selected_button
-    selected_button = button
-    update_button_colors()
-    save_settings()
-
-
-def on_canvas_click(event):
-    if 165 < event.y < 205:
-        if 35 < event.x < 105:
-            choose_button("M4")
-        elif 115 < event.x < 185:
-            choose_button("M5")
-
-
-def on_mouse_click(x, y, button, pressed):
-    global is_active
-    if not pressed:
-        return
-    target = mouse.Button.x1 if selected_button == "M4" else mouse.Button.x2
-    if button == target:
+    if vk == activation_key_vk and not activation_down:
+        activation_down = True
         is_active = not is_active
         if is_active:
-            set_overlay_topmost(True)
-        save_settings()
+            root.after(0, lambda: set_overlay_topmost(True))
+        root.after(0, save_settings)
 
+
+def on_keyboard_release(key):
+    global activation_down
+    if key_virtual_code(key) == activation_key_vk:
+        activation_down = False
 
 
 def make_position_menu(parent):
@@ -384,14 +401,6 @@ def make_position_menu(parent):
     return sub
 
 
-def make_button_menu(parent):
-    sub = tk.Menu(parent, tearoff=0)
-    sub.add_command(label=("✓ M4" if selected_button == "M4" else "M4"),
-                     command=lambda: choose_button("M4"))
-    sub.add_command(label=("✓ M5" if selected_button == "M5" else "M5"),
-                     command=lambda: choose_button("M5"))
-    return sub
-
 
 def show_menu(event=None):
     t = THEMES[current_theme]
@@ -399,10 +408,10 @@ def show_menu(event=None):
                    activebackground=t["border"], activeforeground=t["accent"])
     menu.add_command(label="Theme: Sorrow", state="disabled")
     menu.add_separator()
-    menu.add_command(label=f"Rosary key: {scan_code_name}", state="disabled")
-    menu.add_command(label="Change Rosary key...", command=start_key_capture)
-    menu.add_separator()
-    menu.add_cascade(label=f"Activation button: {selected_button}", menu=make_button_menu(menu))
+    menu.add_command(label=f"Repeat key: {scan_code_name}", state="disabled")
+    menu.add_command(label="Change repeat key...", command=lambda: start_key_capture("repeat"))
+    menu.add_command(label=f"Toggle key: {activation_key_name}", state="disabled")
+    menu.add_command(label="Change toggle key...", command=lambda: start_key_capture("activation"))
     menu.add_separator()
     menu.add_command(label=("✓ Follow Roblox" if follow_roblox else "Follow Roblox"),
                      command=toggle_follow)
@@ -452,7 +461,6 @@ except Exception:
 
 rain_canvas = tk.Canvas(root, width=W, height=H, bg=THEMES[current_theme]["bg"], highlightthickness=0)
 rain_canvas.pack()
-rain_canvas.bind("<Button-1>", on_canvas_click)
 rain_canvas.bind("<ButtonPress-1>", start_drag)
 rain_canvas.bind("<B1-Motion>", drag_window)
 rain_canvas.bind("<ButtonRelease-1>", stop_drag)
@@ -464,8 +472,8 @@ create_rain()
 
 title_text = rain_canvas.create_text(W // 2, 45, text="GrRB", fill="#333333", font=("Impact", 28))
 cps_display = rain_canvas.create_text(W // 2, 115, text=cps_value, fill="#333333", font=("Impact", 56))
-m4_text = rain_canvas.create_text(70, 185, text="M4", fill="#222222", font=("Impact", 16))
-m5_text = rain_canvas.create_text(150, 185, text="M5", fill="#ff0000", font=("Impact", 16))
+repeat_key_text = rain_canvas.create_text(68, 185, text=f"REPEAT: {scan_code_name}", fill="#ff0000", font=("Impact", 10))
+activation_key_text = rain_canvas.create_text(157, 185, text=f"TOGGLE: {activation_key_name}", fill="#333333", font=("Impact", 10))
 
 close_button = tk.Button(root, text="×", bg=THEMES[current_theme]["bg"], fg=THEMES[current_theme]["dim"],
                          bd=0, command=close_app, font=("Arial", 10), relief="flat")
@@ -490,7 +498,7 @@ else:
 
 threading.Thread(target=spam_loop, daemon=True).start()
 mouse.Listener(on_click=on_mouse_click).start()
-keyboard.Listener(on_press=on_keyboard_press).start()
+keyboard.Listener(on_press=on_keyboard_press, on_release=on_keyboard_release).start()
 root.after(100, follow_roblox_loop)
 root.after(40, attack_visuals)
 root.after(35, animate_rain)
