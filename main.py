@@ -21,7 +21,11 @@ capture_target = None
 activation_down = False
 
 THEMES = {
-    "sorrow": {"bg": "#000000", "idle": "#333333", "dim": "#222222", "accent": "#ff0000", "border": "#1a1a1a", "rain": True, "font": "Impact"},
+    "sorrow": {"label": "Sorrow", "bg": "#050505", "idle": "#777777", "dim": "#333333", "accent": "#ff3030", "border": "#551111", "rain": True, "font": "Impact", "rain_colors": ["#ff2020", "#8b0000", "#4a0000"]},
+    "glitch": {"label": "Glitch", "bg": "#10051a", "idle": "#6f507d", "dim": "#39234a", "accent": "#e65cff", "border": "#6e2385", "rain": True, "font": "Consolas", "rain_colors": ["#e65cff", "#7626a8", "#321047"]},
+    "void": {"label": "Void", "bg": "#030912", "idle": "#43566d", "dim": "#1b2a3c", "accent": "#50bfff", "border": "#15354e", "rain": False, "font": "Consolas", "rain_colors": ["#50bfff", "#1f6a9b", "#0b253a"]},
+    "divine": {"label": "Divine", "bg": "#100e09", "idle": "#746744", "dim": "#3b3422", "accent": "#e8c56a", "border": "#75602b", "rain": False, "font": "Georgia", "rain_colors": ["#e8c56a", "#9b7832", "#55401c"]},
+    "retro": {"label": "Retro", "bg": "#030a05", "idle": "#45694b", "dim": "#1e3c27", "accent": "#61ff87", "border": "#1d6b35", "rain": True, "font": "Consolas", "rain_colors": ["#61ff87", "#249c49", "#0c4b21"]},
 }
 
 current_theme = "sorrow"
@@ -403,6 +407,7 @@ def on_keyboard_press(key):
         if timer_running:
             timer_elapsed += time.perf_counter() - timer_started_at
             timer_running = False
+            timer_best = timer_elapsed if timer_best is None else min(timer_best, timer_elapsed)
             timer_started_at = None
         else:
             timer_running = True
