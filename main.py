@@ -565,5 +565,6 @@ keyboard.Listener(on_press=on_keyboard_press, on_release=on_keyboard_release).st
 root.after(100, follow_roblox_loop)
 root.after(40, attack_visuals)
 root.after(35, animate_rain)
+root.after(100, update_timer_display)
 root.protocol("WM_DELETE_WINDOW", close_app)
 root.mainloop()
