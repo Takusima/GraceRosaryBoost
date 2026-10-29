@@ -370,7 +370,9 @@ def on_keyboard_press(key):
         target = capture_target
         capture_target = None
         code = ctypes.windll.user32.MapVirtualKeyW(vk, 0)
-        if not code:
+        # keybd_event's scan-code path accepts one-byte scan codes only.
+        if not code or code > 0xFF:
+            root.after(0, lambda: root.title("Unsupported key — choose another"))
             return
         name = key_display_name(key, vk)
         if target == "repeat":
