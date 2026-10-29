@@ -16,10 +16,10 @@ Automates the use of Rosary Ring abilities in Benediction to quickly change crou
 
 ## Controls
 
-- Mouse4 / Mouse5 selects the trigger button.
+- Mouse4 / Mouse5 selects the activation button.
 - Right-click opens the menu.
+- Use **Change Rosary key...** in the menu, then press the desired keyboard key. The choice is saved between launches.
 - Left-drag moves the overlay.
-- The Rosary input scan code is configured in `SCAN_CODE` in `main.py`.
 
 > The old source referenced `SCAN_CODE` without defining it. The new build defines it explicitly so the value can be adjusted for the actual in-game binding.
 

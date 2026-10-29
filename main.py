@@ -6,13 +6,15 @@ import random
 import threading
 import time
 import tkinter as tk
-from pynput import mouse
+from pynput import mouse, keyboard
 
 W, H = 220, 220
 CONFIG_FILE = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "GraceRosaryBoost", "settings.json")
 
-# Set this to the scan code used by the in-game Rosary action.
+# Default scan code for the in-game Rosary action; can be changed from the overlay menu.
 SCAN_CODE = 0x11
+scan_code_name = "W"
+capture_key = False
 
 THEMES = {
     "sorrow": {"bg": "#000000", "idle": "#333333", "dim": "#222222", "accent": "#ff0000", "border": "#1a1a1a", "rain": True, "font": "Impact"},
@@ -35,7 +37,7 @@ last_roblox_rect = None
 
 
 def load_settings():
-    global current_theme, selected_button, cps_value, follow_roblox, follow_preset, saved_x, saved_y
+    global current_theme, selected_button, cps_value, follow_roblox, follow_preset, saved_x, saved_y, SCAN_CODE, scan_code_name
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -46,6 +48,8 @@ def load_settings():
         cps_value = str(max(1, min(100, int(data.get("cps", 30)))))
         follow_roblox = bool(data.get("follow_roblox", True))
         follow_preset = data.get("preset", "bottom-right")
+        SCAN_CODE = max(1, min(255, int(data.get("scan_code", SCAN_CODE))))
+        scan_code_name = str(data.get("scan_code_name", scan_code_name))
         saved_x, saved_y = data.get("x"), data.get("y")
     except Exception:
         pass
@@ -58,6 +62,7 @@ def save_settings():
             json.dump({
                 "theme": current_theme, "button": selected_button, "cps": int(cps_value or 30),
                 "follow_roblox": follow_roblox, "preset": follow_preset,
+                "scan_code": SCAN_CODE, "scan_code_name": scan_code_name,
                 "x": root.winfo_x(), "y": root.winfo_y()
             }, f, indent=2)
     except Exception:
@@ -309,6 +314,39 @@ def on_key(event):
     save_settings()
 
 
+def set_scan_code(code, name):
+    global SCAN_CODE, scan_code_name
+    SCAN_CODE = code
+    scan_code_name = name
+    root.title("GraceRosaryBoost")
+    save_settings()
+
+
+def start_key_capture():
+    global capture_key
+    root.title("Press the desired Rosary key...")
+    capture_key = True
+
+
+def on_keyboard_press(key):
+    global capture_key
+    if not capture_key:
+        return
+    vk = getattr(key, "vk", None)
+    if vk is None:
+        char = getattr(key, "char", None)
+        if char:
+            vk = ord(char.upper())
+    if not vk:
+        return
+    code = ctypes.windll.user32.MapVirtualKeyW(vk, 0)
+    if not code:
+        return
+    name = getattr(key, "char", None) or str(key).replace("Key.", "")
+    capture_key = False
+    root.after(0, lambda: set_scan_code(code, name))
+
+
 def choose_button(button):
     global selected_button
     selected_button = button
@@ -360,6 +398,9 @@ def show_menu(event=None):
     menu = tk.Menu(root, tearoff=0, bg=t["bg"], fg=t["idle"],
                    activebackground=t["border"], activeforeground=t["accent"])
     menu.add_command(label="Theme: Sorrow", state="disabled")
+    menu.add_separator()
+    menu.add_command(label=f"Rosary key: {scan_code_name}", state="disabled")
+    menu.add_command(label="Change Rosary key...", command=start_key_capture)
     menu.add_separator()
     menu.add_cascade(label=f"Activation button: {selected_button}", menu=make_button_menu(menu))
     menu.add_separator()
@@ -449,6 +490,7 @@ else:
 
 threading.Thread(target=spam_loop, daemon=True).start()
 mouse.Listener(on_click=on_mouse_click).start()
+keyboard.Listener(on_press=on_keyboard_press).start()
 root.after(100, follow_roblox_loop)
 root.after(40, attack_visuals)
 root.after(35, animate_rain)
