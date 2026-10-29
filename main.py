@@ -30,10 +30,6 @@ THEMES = {
 
 current_theme = "sorrow"
 is_active = False
-timer_running = False
-timer_started_at = None
-timer_elapsed = 0.0
-timer_best = None
 cps_value = "30"
 follow_roblox = True
 follow_preset = "bottom-right"
@@ -48,7 +44,7 @@ last_roblox_rect = None
 
 
 def load_settings():
-    global current_theme, cps_value, follow_roblox, follow_preset, saved_x, saved_y, SCAN_CODE, scan_code_name, repeat_key_vk, activation_key_vk, activation_key_name, timer_best
+    global current_theme, cps_value, follow_roblox, follow_preset, saved_x, saved_y, SCAN_CODE, scan_code_name, repeat_key_vk, activation_key_vk, activation_key_name
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -62,7 +58,6 @@ def load_settings():
         repeat_key_vk = int(data.get("repeat_key_vk", ord(scan_code_name.upper()[0]) if scan_code_name else 0x57))
         activation_key_vk = int(data.get("activation_key_vk", activation_key_vk))
         activation_key_name = str(data.get("activation_key_name", activation_key_name))
-        timer_best = data.get("timer_best")
         saved_x, saved_y = data.get("x"), data.get("y")
     except Exception:
         pass
@@ -79,7 +74,6 @@ def save_settings():
                 "repeat_key_vk": repeat_key_vk, "activation_key_vk": activation_key_vk,
                 "activation_key_name": activation_key_name,
                 "x": root.winfo_x(), "y": root.winfo_y(),
-                "timer_best": timer_best
             }, f, indent=2)
     except Exception:
         pass
@@ -194,8 +188,6 @@ def update_button_colors():
     t = THEMES[current_theme]
     rain_canvas.itemconfig(repeat_key_text, text=f"REPEAT: {scan_code_name}", fill=t["accent"])
     rain_canvas.itemconfig(activation_key_text, text=f"TOGGLE: {activation_key_name}", fill=t["idle"])
-    rain_canvas.itemconfig(timer_display, fill=t["accent"])
-    rain_canvas.itemconfig(timer_hint, fill=t["dim"])
 
 
 
@@ -207,8 +199,6 @@ def apply_theme():
     menu_button.configure(bg=t["bg"], fg=t["dim"], activebackground=t["bg"])
     rain_canvas.itemconfig(title_text, fill=t["idle"], font=(t["font"], 25))
     rain_canvas.itemconfig(cps_display, fill=t["idle"], font=(t["font"], 48))
-    rain_canvas.itemconfig(timer_display, fill=t["accent"], font=(t["font"], 17))
-    rain_canvas.itemconfig(timer_hint, fill=t["dim"], font=(t["font"], 8))
     update_button_colors()
 
 
@@ -222,8 +212,8 @@ def attack_visuals():
         if pulse_val <= 0:
             pulse_dir = 1
         flash = random.random() > 0.96
-        bg = "#330000" if flash else interpolate_color("#000000", "#120000", pulse_val)
-        fg = "#ff0000" if flash else interpolate_color("#660000", "#ff0000", pulse_val)
+        bg = t["border"] if flash else interpolate_color(t["bg"], t["border"], pulse_val * 0.65)
+        fg = t["accent"] if flash else interpolate_color(t["idle"], t["accent"], pulse_val)
         rain_canvas.configure(bg=bg)
         close_button.configure(bg=bg)
         menu_button.configure(bg=bg)
@@ -232,7 +222,6 @@ def attack_visuals():
         rain_canvas.coords(cps_display, W // 2 - dx, 115 + dy)
         rain_canvas.itemconfig(title_text, fill=fg)
         rain_canvas.itemconfig(cps_display, fill=fg)
-        rain_canvas.itemconfig(timer_display, fill=fg)
         rain_canvas.itemconfig(repeat_key_text, fill=fg)
         rain_canvas.itemconfig(activation_key_text, fill=fg)
         root.config(highlightbackground=fg)
@@ -244,7 +233,6 @@ def attack_visuals():
         rain_canvas.coords(cps_display, W // 2, 115)
         rain_canvas.itemconfig(title_text, fill=t["idle"])
         rain_canvas.itemconfig(cps_display, fill=t["idle"])
-        rain_canvas.itemconfig(timer_display, fill=t["accent"])
         update_button_colors()
         root.config(highlightbackground=t["border"])
     root.after(40, attack_visuals)
@@ -348,23 +336,6 @@ def set_scan_code(code, name, vk):
     save_settings()
 
 
-def format_time(seconds):
-    seconds = max(0, int(seconds))
-    minutes, secs = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
-
-
-def update_timer_display():
-    global timer_best
-    elapsed = timer_elapsed + (time.perf_counter() - timer_started_at if timer_running and timer_started_at is not None else 0.0)
-    rain_canvas.itemconfig(timer_display, text=format_time(elapsed))
-    best_text = f"BEST {format_time(timer_best)}" if timer_best is not None else "F7 START/PAUSE  •  F8 RESET"
-    rain_canvas.itemconfig(timer_hint, text=best_text)
-    if timer_running:
-        root.after(200, update_timer_display)
-
-
 def set_activation_key(vk, name):
     global activation_key_vk, activation_key_name, activation_down
     activation_key_vk = vk
@@ -398,28 +369,9 @@ def key_display_name(key, vk):
 
 
 def on_keyboard_press(key):
-    global capture_target, is_active, activation_down, timer_running, timer_started_at, timer_elapsed, timer_best
+    global capture_target, is_active, activation_down
     vk = key_virtual_code(key)
     if not vk:
-        return
-    if vk == 0x76:  # F7: start/pause run timer
-        if timer_running:
-            timer_elapsed += time.perf_counter() - timer_started_at
-            timer_running = False
-            timer_best = timer_elapsed if timer_best is None else min(timer_best, timer_elapsed)
-            timer_started_at = None
-        else:
-            timer_running = True
-            timer_started_at = time.perf_counter()
-        root.after(0, update_timer_display)
-        root.after(0, save_settings)
-        return
-    if vk == 0x77:  # F8: reset timer
-        timer_running = False
-        timer_started_at = None
-        timer_elapsed = 0.0
-        root.after(0, update_timer_display)
-        root.after(0, save_settings)
         return
     if capture_target:
         target = capture_target
@@ -533,8 +485,6 @@ create_rain()
 
 title_text = rain_canvas.create_text(W // 2, 36, text="GrRB", fill="#333333", font=("Impact", 25))
 cps_display = rain_canvas.create_text(W // 2, 91, text=cps_value, fill="#333333", font=("Impact", 48))
-timer_display = rain_canvas.create_text(W // 2, 145, text="00:00", fill="#ff3030", font=("Impact", 17))
-timer_hint = rain_canvas.create_text(W // 2, 168, text="F7 START/PAUSE  •  F8 RESET", fill="#333333", font=("Consolas", 8))
 repeat_key_text = rain_canvas.create_text(78, 215, text=f"REPEAT: {scan_code_name}", fill="#ff0000", font=("Impact", 10))
 activation_key_text = rain_canvas.create_text(175, 215, text=f"TOGGLE: {activation_key_name}", fill="#333333", font=("Impact", 10))
 
@@ -564,6 +514,5 @@ keyboard.Listener(on_press=on_keyboard_press, on_release=on_keyboard_release).st
 root.after(100, follow_roblox_loop)
 root.after(40, attack_visuals)
 root.after(35, animate_rain)
-root.after(100, update_timer_display)
 root.protocol("WM_DELETE_WINDOW", close_app)
 root.mainloop()
